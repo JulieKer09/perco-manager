@@ -38,6 +38,11 @@ contextBridge.exposeInMainWorld('authAPI', {
   },
 });
 
+contextBridge.exposeInMainWorld('setupAPI', {
+  getConfig: () => ipcRenderer.invoke('setup:getConfig'),
+  saveConfig: payload => ipcRenderer.invoke('setup:saveConfig', payload),
+});
+
 contextBridge.exposeInMainWorld('syncAPI', {
   onDataChanged: callback => {
     const listener = (_event, payload) => callback(payload);

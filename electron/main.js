@@ -59,7 +59,83 @@ function getAppIconPath() {
 // --- Fenêtre principale ---
 let mainWindow;
 let widgetWindow;
+let setupWindow;
 let widgetBounds = null;
+
+function hasRequiredRuntimeConfig() {
+  return Boolean(process.env.MONGODB_URI) && Boolean(process.env.CLIENT_ID);
+}
+
+function shouldAllowInteractiveSetup() {
+  return !app.isPackaged;
+}
+
+function createSetupWindow() {
+  if (setupWindow && !setupWindow.isDestroyed()) {
+    setupWindow.show();
+    setupWindow.focus();
+    return setupWindow;
+  }
+
+  setupWindow = new BrowserWindow({
+    width: 860,
+    height: 640,
+    minWidth: 760,
+    minHeight: 580,
+    title: 'Configuration Perco Dofus',
+    icon: getAppIconPath(),
+    autoHideMenuBar: true,
+    backgroundColor: '#0f1729',
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  });
+
+  setupWindow.loadFile(path.join(__dirname, '..', 'renderer', 'setup.html'));
+  setupWindow.on('closed', () => {
+    setupWindow = null;
+    if (!mainWindow || mainWindow.isDestroyed()) {
+      app.quit();
+    }
+  });
+
+  return setupWindow;
+}
+
+async function saveRuntimeConfig({ mongodbUri, clientId, redirectUri }) {
+  const cleanMongoUri = String(mongodbUri || '').trim();
+  const cleanClientId = String(clientId || '').trim();
+  const cleanRedirectUri = String(redirectUri || '').trim() || 'http://127.0.0.1:43871/callback';
+
+  if (!cleanMongoUri) {
+    throw new Error('MONGODB_URI est obligatoire.');
+  }
+
+  if (!cleanClientId) {
+    throw new Error('CLIENT_ID est obligatoire.');
+  }
+
+  const envPath = getRecommendedEnvPath();
+  fs.mkdirSync(path.dirname(envPath), { recursive: true });
+  fs.writeFileSync(
+    envPath,
+    [
+      `MONGODB_URI=${cleanMongoUri}`,
+      `CLIENT_ID=${cleanClientId}`,
+      `DISCORD_REDIRECT_URI=${cleanRedirectUri}`,
+      '',
+    ].join('\n'),
+    'utf8'
+  );
+
+  process.env.MONGODB_URI = cleanMongoUri;
+  process.env.CLIENT_ID = cleanClientId;
+  process.env.DISCORD_REDIRECT_URI = cleanRedirectUri;
+
+  return envPath;
+}
 
 function getCurrentDiscordUser() {
   return getDiscordUser();
@@ -357,6 +433,37 @@ ipcMain.handle('auth:getSession', async () => {
   return session ? { user: session.user } : null;
 });
 
+ipcMain.handle('setup:getConfig', async () => {
+  return {
+    mongodbUri: process.env.MONGODB_URI || '',
+    clientId: process.env.CLIENT_ID || '',
+    redirectUri: process.env.DISCORD_REDIRECT_URI || 'http://127.0.0.1:43871/callback',
+    envPath: getRecommendedEnvPath(),
+  };
+});
+
+ipcMain.handle('setup:saveConfig', async (_event, payload) => {
+  const envPath = await saveRuntimeConfig(payload || {});
+  await connectDB();
+
+  const session = await loadPersistedSession();
+  if (session?.user) {
+    await claimLegacyDataForUser(session.user);
+  }
+
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    createWindow();
+  }
+
+  if (setupWindow && !setupWindow.isDestroyed()) {
+    setupWindow.close();
+  }
+
+  broadcastAuthState();
+
+  return { success: true, envPath };
+});
+
 ipcMain.handle('auth:login', async () => {
   const session = await loginWithDiscord({ clientId: process.env.CLIENT_ID });
   await claimLegacyDataForUser(session.user);
@@ -413,13 +520,28 @@ ipcMain.handle('widget:closeSelf', event => {
 // --- Init ---
 app.whenReady().then(async () => {
   try {
-    await connectDB();
-    const session = await loadPersistedSession();
-    if (session?.user) {
-      await claimLegacyDataForUser(session.user);
+    if (hasRequiredRuntimeConfig()) {
+      await connectDB();
+      const session = await loadPersistedSession();
+      if (session?.user) {
+        await claimLegacyDataForUser(session.user);
+      }
+      createWindow();
+      broadcastAuthState();
+    } else if (shouldAllowInteractiveSetup()) {
+      createSetupWindow();
+    } else {
+      throw new Error(
+        [
+          'Configuration manquante dans la version installee.',
+          'Le fichier .env embarque est introuvable ou incomplet.',
+          loadedEnvPath
+            ? `Fichier detecte: ${loadedEnvPath}`
+            : 'Aucun fichier .env detecte au demarrage.',
+          'Action: reconstruire le setup avec un .env complet (MONGODB_URI + CLIENT_ID).',
+        ].join('\n')
+      );
     }
-    createWindow();
-    broadcastAuthState();
   } catch (err) {
     console.error('❌ Erreur de démarrage :', err.message);
     dialog.showErrorBox('Perco Dofus', err.message);

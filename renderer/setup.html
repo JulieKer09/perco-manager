@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy"
+    content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline';" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Configuration Perco Dofus</title>
+  <style>
+    :root {
+      --bg: #0e1423;
+      --panel: #161f33;
+      --border: #2a3a5e;
+      --text: #eef3ff;
+      --muted: #9fb0d3;
+      --accent: #e8b84b;
+      --good: #5de2a5;
+      --error: #ff7b7b;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Segoe UI", sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(900px 420px at 90% -10%, rgba(91, 141, 238, .24), transparent 60%),
+        radial-gradient(600px 320px at -10% -10%, rgba(232, 184, 75, .18), transparent 55%),
+        var(--bg);
+      display: grid;
+      place-items: center;
+      padding: 24px;
+    }
+
+    .card {
+      width: min(100%, 760px);
+      background: linear-gradient(180deg, rgba(25, 35, 58, .96), rgba(18, 26, 44, .96));
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 26px;
+      box-shadow: 0 30px 80px rgba(0, 0, 0, .38);
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 30px;
+      line-height: 1.15;
+    }
+
+    .subtitle {
+      margin: 10px 0 0;
+      color: var(--muted);
+      line-height: 1.55;
+    }
+
+    form {
+      margin-top: 20px;
+      display: grid;
+      gap: 14px;
+    }
+
+    label {
+      display: grid;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: .02em;
+    }
+
+    input {
+      width: 100%;
+      border: 1px solid var(--border);
+      background: rgba(10, 16, 29, .86);
+      color: var(--text);
+      border-radius: 10px;
+      padding: 11px 12px;
+      font-size: 14px;
+      outline: none;
+    }
+
+    input:focus {
+      border-color: rgba(232, 184, 75, .65);
+      box-shadow: 0 0 0 3px rgba(232, 184, 75, .15);
+    }
+
+    .path {
+      margin-top: 8px;
+      color: #7ec8ff;
+      font-size: 12px;
+      word-break: break-all;
+    }
+
+    .actions {
+      margin-top: 8px;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    button {
+      border: none;
+      border-radius: 10px;
+      background: var(--accent);
+      color: #161208;
+      font-weight: 700;
+      font-size: 14px;
+      padding: 11px 16px;
+      cursor: pointer;
+    }
+
+    button:disabled {
+      opacity: .65;
+      cursor: wait;
+    }
+
+    .status {
+      min-height: 1.2em;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .status.ok { color: var(--good); }
+    .status.error { color: var(--error); }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Configuration initiale</h1>
+    <p class="subtitle">Cette etape n'est necessaire qu'une seule fois. Remplis les infos, puis l'application demarrera normalement.</p>
+
+    <form id="setup-form">
+      <label>
+        MONGODB_URI
+        <input id="mongodb-uri" name="mongodbUri" type="text" placeholder="mongodb+srv://.../perco-dofus" required />
+      </label>
+
+      <label>
+        CLIENT_ID Discord
+        <input id="client-id" name="clientId" type="text" placeholder="123456789012345678" required />
+      </label>
+
+      <label>
+        DISCORD_REDIRECT_URI
+        <input id="redirect-uri" name="redirectUri" type="text" value="http://127.0.0.1:43871/callback" required />
+      </label>
+
+      <div class="path" id="env-path"></div>
+
+      <div class="actions">
+        <button id="save-btn" type="submit">Enregistrer et demarrer</button>
+        <span id="status" class="status"></span>
+      </div>
+    </form>
+  </div>
+
+  <script src="js/setup.js"></script>
+</body>
+</html>

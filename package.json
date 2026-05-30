@@ -31,6 +31,12 @@
       "models/**/*",
       "package.json"
     ],
+    "extraResources": [
+      {
+        "from": ".env",
+        "to": ".env"
+      }
+    ],
     "win": {
       "signAndEditExecutable": false,
       "icon": "renderer/assets/icons/Logo.ico",
