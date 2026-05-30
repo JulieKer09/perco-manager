@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy"
+    content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline';" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Widget Perco</title>
+  <link rel="stylesheet" href="css/widget.css" />
+</head>
+<body>
+  <div id="widget-auth-veil" class="widget-auth-veil hidden">
+    <div class="widget-auth-card">
+      <p class="widget-auth-kicker">Discord requis</p>
+      <h2>Connecte-toi pour utiliser le widget</h2>
+      <p id="widget-auth-status" class="widget-auth-status">Aucune session détectée.</p>
+      <button type="button" id="widget-discord-login-button" class="widget-refresh">Se connecter avec Discord</button>
+    </div>
+  </div>
+
+  <div class="widget-shell">
+    <section class="widget-toolbar">
+      <img src="assets/icons/Logo.png" alt="Logo Perco" class="widget-logo" />
+      <span class="widget-title-inline">Gestionnaire Perco</span>
+      <span id="widget-discord-badge" class="widget-auth-badge">Discord: hors ligne</span>
+      <button type="button" id="widget-discord-auth-button" class="widget-refresh widget-auth-button">Connexion</button>
+      <select id="widget-server" class="widget-input">
+        <option value="Mikhal">⚔️ Mikhal</option>
+        <option value="Dakal">🛡️ Dakal</option>
+        <option value="Kourial">🏹 Kourial</option>
+      </select>
+      <select id="widget-tag" class="widget-input">
+        <option value="">Tous les tags</option>
+        <option value="__favorites__">★ Favoris</option>
+      </select>
+      <button type="button" class="widget-refresh" id="widget-refresh">Actualiser</button>
+      <button type="button" class="widget-window-btn" id="widget-minimize" aria-label="Réduire">−</button>
+      <button type="button" class="widget-window-btn danger" id="widget-close" aria-label="Fermer">✕</button>
+    </section>
+
+    <section class="widget-list-wrap">
+      <div class="widget-feedback" id="widget-feedback">Chargement…</div>
+      <div class="widget-list" id="widget-list"></div>
+    </section>
+  </div>
+
+  <div class="widget-modal-overlay hidden" id="widget-value-modal" role="dialog" aria-modal="true" aria-labelledby="widget-value-title">
+    <div class="widget-modal">
+      <h3 id="widget-value-title">Valeur recoltee</h3>
+      <p class="widget-modal-text">Entre le montant recolte en kamas.</p>
+      <input type="number" id="widget-value-input" class="widget-input" min="0" step="1" value="0" />
+      <div class="widget-modal-actions">
+        <button type="button" class="widget-refresh" id="widget-value-cancel">Annuler</button>
+        <button type="button" class="widget-refresh" id="widget-value-confirm">Valider</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/widget.js"></script>
+</body>
+</html>

@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy"
+    content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline';" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Gestionnaire de Percepteurs</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+  <div id="auth-veil" class="auth-veil hidden">
+    <div class="auth-card">
+      <div class="auth-ghost-meta" aria-hidden="true">
+        <span id="auth-user-name">Aucune session</span>
+      </div>
+      <div class="auth-actions">
+        <button type="button" id="discord-login-button" class="auth-image-login">Connexion</button>
+      </div>
+      <p id="auth-status-text" class="auth-status-text"></p>
+    </div>
+  </div>
+
+  <!-- ═══ NAVIGATION ONGLETS ═══ -->
+  <nav class="tab-nav">
+    <img src="assets/icons/Logo.png" alt="Logo Perco" class="app-logo" />
+    <button class="tab active" data-tab="serveur">Zones</button>
+    <button class="tab" data-tab="dashboard">Tableau de bord</button>
+    <div class="nav-status-group">
+      <span id="db-status" class="db-status">●</span>
+      <span id="serveur-actif" class="serveur-badge">Mikhal</span>
+      <button type="button" id="widget-toggle-badge" class="serveur-badge widget-toggle-badge">Widget: OFF</button>
+      <span id="discord-session-badge" class="serveur-badge discord-session-badge">Discord: hors ligne</span>
+      <button type="button" id="discord-auth-button" class="serveur-badge discord-auth-button">Connexion Discord</button>
+    </div>
+  </nav>
+
+  <!-- ═══ CONTENU ONGLET : SERVEUR ═══ -->
+  <div class="tab-page active" id="tab-serveur">
+
+    <!-- Barre d'action -->
+    <div class="action-bar">
+      <div class="action-bar-right">
+        <input type="text" id="search" class="input search-input" placeholder="Rechercher..." />
+        <span id="count-label" class="count-label">0 perco(s)</span>
+      </div>
+    </div>
+
+    <!-- Liste des percepteurs -->
+    <div class="perco-list" id="perco-list">
+      <div class="empty-msg" id="empty-msg">Aucun percepteur sur ce serveur.</div>
+    </div>
+  </div>
+
+  <!-- ═══ CONTENU ONGLET : TABLEAU DE BORD ═══ -->
+  <div class="tab-page" id="tab-dashboard">
+    <div class="dashboard">
+
+      <div class="dash-header">
+        <h2>Tableau de bord</h2>
+        <div class="dash-view-switch" id="dash-view-switch">
+          <button type="button" class="dash-switch-btn active" data-mode="global">Vue globale</button>
+          <button type="button" class="dash-switch-btn" data-mode="mine">Mes zones</button>
+        </div>
+        <select id="dash-filtre-serveur" class="input" style="width:150px">
+          <option value="tous">Tous les serveurs</option>
+          <option value="Mikhal">⚔️ Mikhal</option>
+          <option value="Dakal">🛡️ Dakal</option>
+          <option value="Kourial">🏹 Kourial</option>
+        </select>
+        <select id="dash-filtre-periode" class="input" style="width:170px">
+          <option value="24h">Dernieres 24h</option>
+          <option value="7d">7 derniers jours</option>
+          <option value="30d" selected>30 derniers jours</option>
+          <option value="90d">90 derniers jours</option>
+          <option value="all">Depuis le debut</option>
+        </select>
+        <select id="dash-filtre-zone" class="input" style="width:240px">
+          <option value="all">Toutes les zones</option>
+        </select>
+        <div class="dash-content-switch" id="dash-content-switch">
+          <button type="button" class="dash-switch-btn active" data-content="zones">Rapport par zone</button>
+          <button type="button" class="dash-switch-btn" data-content="history">Historique</button>
+        </div>
+      </div>
+
+      <div class="dash-stats">
+        <div class="stat-card">
+          <div class="stat-value" id="stat-total-kamas">—</div>
+          <div class="stat-label">Kamas récoltés</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="stat-count-recoltes">—</div>
+          <div class="stat-label">Récoltes</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="stat-count-reposes">—</div>
+          <div class="stat-label">Reposées</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="stat-count-morts">—</div>
+          <div class="stat-label">Percos morts</div>
+        </div>
+        <div class="stat-card stat-card-sacoche">
+          <div class="stat-icon-wrap">
+            <img class="stat-icon" src="assets/icons/Sacoche.png" alt="Sacoche" />
+          </div>
+          <div class="stat-value" id="stat-count-sacoches-perdues">—</div>
+          <div class="stat-label">Sacoches perdues</div>
+        </div>
+        <div class="stat-card stat-card-coffre">
+          <div class="stat-icon-wrap">
+            <img class="stat-icon" src="assets/icons/Coffre.png" alt="Coffre" />
+          </div>
+          <div class="stat-value" id="stat-count-coffres-perdus">—</div>
+          <div class="stat-label">Coffres perdus</div>
+        </div>
+        <div class="stat-card stat-card-potion">
+          <div class="stat-icon-wrap">
+            <img class="stat-icon stat-icon-wide" src="assets/icons/potion perco.png" alt="Potion utilisée" />
+          </div>
+          <div class="stat-value" id="stat-count-potions">—</div>
+          <div class="stat-label">Popos utilisées</div>
+        </div>
+      </div>
+
+      <div class="dash-potions-box">
+        <div class="dash-potions-header">
+          <h3>Consommation de potions</h3>
+          <span id="dash-potions-meta" class="dash-potions-meta">Aucune popo utilisée</span>
+        </div>
+        <div id="dash-potion-levels" class="dash-potion-levels">
+          <div class="dash-potion-empty">Aucune pose suivie pour le moment.</div>
+        </div>
+      </div>
+
+      <div class="dash-zones-box">
+        <div class="dash-zones-header">
+          <h3>Rapport par zone</h3>
+          <div class="dash-zones-controls">
+            <select id="dash-zone-sort" class="input" style="width:190px">
+              <option value="kamas">Tri: Kamas rapportés</option>
+              <option value="recoltes">Tri: Nb de récoltes</option>
+              <option value="morts">Tri: Nb de morts</option>
+              <option value="alpha">Tri: Zone A-Z</option>
+            </select>
+            <span id="dash-zones-meta" class="dash-zones-meta">Aucune donnée</span>
+          </div>
+        </div>
+        <div id="dash-zone-report" class="dash-zone-report">
+          <div class="dash-zone-empty">Aucune récolte/mort enregistrée sur la période.</div>
+        </div>
+      </div>
+
+      <div class="dash-history">
+        <h3>Historique</h3>
+        <div class="history-list" id="recolte-history-list">
+          <div class="empty-msg">Aucune récolte enregistrée.</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ═══ MODAL CHOIX SERVEUR ═══ -->
+  <div id="modal-serveur" class="modal-overlay hidden">
+    <div class="modal modal-sm">
+      <div class="modal-header">
+        <h2>Choisir un serveur</h2>
+        <button class="modal-close" data-modal="modal-serveur">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="server-list">
+          <button class="server-option" data-server="Mikhal">⚔️ Mikhal</button>
+          <button class="server-option" data-server="Dakal">🛡️ Dakal</button>
+          <button class="server-option" data-server="Kourial">🏹 Kourial</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ MODAL AJOUTER PERCEPTEUR ═══ -->
+  <div id="modal-add" class="modal-overlay hidden">
+    <div class="modal">
+      <div class="modal-header">
+        <h2 id="modal-add-title">Ajouter un percepteur</h2>
+        <button class="modal-close" data-modal="modal-add">✕</button>
+      </div>
+      <form id="perco-form" class="modal-body">
+        <input type="hidden" id="form-id" />
+
+        <div class="form-row">
+          <label>Zone <span class="required">*</span></label>
+          <div class="zone-combo">
+            <input type="text" id="form-zone-search" class="input"
+              placeholder="Nom de la zone..." autocomplete="off" />
+          </div>
+        </div>
+        <div class="form-row">
+          <label>Le percepteur a…</label>
+          <div class="form-icon-picker">
+            <div class="picker-slot" id="picker-sacoche" data-type="sacoche">
+              <img class="picker-icon" src="assets/icons/Sacoche.png" alt="Sacoche" />
+              <span class="picker-label">Sacoche</span>
+            </div>
+            <div class="picker-slot" id="picker-coffre" data-type="coffre">
+              <img class="picker-icon" src="assets/icons/Coffre.png" alt="Coffre" />
+              <span class="picker-label">Coffre</span>
+            </div>
+          </div>
+        </div>
+        <div class="form-row">
+          <label>Clé utilisée ?</label>
+          <div class="form-icon-picker">
+            <div class="picker-slot" id="picker-cle" data-type="cle">
+              <span class="picker-icon">🔑</span>
+              <span class="picker-label">Non</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-ghost" id="btn-cancel-add">Annuler</button>
+          <button type="submit" class="btn btn-primary">Enregistrer</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ═══ MODAL RÉCOLTER ═══ -->
+  <div id="modal-recolter" class="modal-overlay hidden">
+    <div class="modal modal-sm">
+      <div class="modal-header">
+        <h2>Récolter le percepteur</h2>
+        <button class="modal-close" data-modal="modal-recolter">✕</button>
+      </div>
+      <div class="modal-body">
+        <p class="modal-info" id="recolter-perco-name"></p>
+        <div class="form-row">
+          <label>Valeur récoltée (kamas)</label>
+          <input type="number" id="recolter-valeur" class="input" placeholder="Ex: 500000" min="0" />
+        </div>
+        <div class="form-row">
+          <label>Après la récolte…</label>
+          <div class="recolte-opts">
+            <button type="button" class="recolte-opt" id="opt-norepose">
+              ✔️ Récolter seulement
+            </button>
+            <button type="button" class="recolte-opt active" id="opt-repose">
+              📍 Récolter &amp; Reposer
+            </button>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-ghost" id="btn-cancel-recolter">Annuler</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ MODAL CONFIRMER MORT ═══ -->
+  <div id="modal-mort" class="modal-overlay hidden">
+    <div class="modal modal-sm">
+      <div class="modal-header">
+        <h2>Signaler la mort</h2>
+        <button class="modal-close" data-modal="modal-mort">✕</button>
+      </div>
+      <div class="modal-body">
+        <p class="modal-info" id="mort-perco-name"></p>
+        <p class="confirm-text">Confirmer que ce percepteur a été tué ?</p>
+        <div class="form-row">
+          <label>Après la mort…</label>
+          <div class="recolte-opts">
+            <button type="button" class="recolte-opt active" id="opt-mort-norepose">
+              ☠️ Ne pas reposer
+            </button>
+            <button type="button" class="recolte-opt" id="opt-mort-repose">
+              📍 Reposer
+            </button>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-ghost" id="btn-cancel-mort">Annuler</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/app.js"></script>
+</body>
+</html>
