@@ -13,7 +13,12 @@ const {
 } = require('./discord-auth');
 
 function loadEnvironment() {
+  const userEnvPath = path.join(app.getPath('userData'), '.env');
+  const resourcesEnvPath = path.join(process.resourcesPath || '', '.env');
+
   const candidates = [
+    userEnvPath,
+    resourcesEnvPath,
     path.resolve(process.cwd(), '.env'),
     path.join(path.dirname(process.execPath), '.env'),
     path.resolve(__dirname, '..', '.env'),
@@ -30,7 +35,11 @@ function loadEnvironment() {
   return null;
 }
 
-loadEnvironment();
+const loadedEnvPath = loadEnvironment();
+
+function getRecommendedEnvPath() {
+  return path.join(app.getPath('userData'), '.env');
+}
 
 const APP_ICON_PNG_PATH = path.join(__dirname, '..', 'renderer', 'assets', 'icons', 'Logo.png');
 const APP_ICON_ICO_PATH = path.join(__dirname, '..', 'renderer', 'assets', 'icons', 'Logo.ico');
@@ -246,7 +255,21 @@ async function connectDB() {
   const mongoUri = process.env.MONGODB_URI;
 
   if (!mongoUri) {
-    throw new Error('MONGODB_URI est manquant. Créez un fichier .env à côté de l\'application.');
+    const hintPath = getRecommendedEnvPath();
+    const loadedInfo = loadedEnvPath
+      ? `Fichier .env chargé : ${loadedEnvPath}`
+      : 'Aucun fichier .env trouvé au démarrage.';
+
+    throw new Error(
+      [
+        'MONGODB_URI est manquant.',
+        loadedInfo,
+        `Créez un fichier .env ici : ${hintPath}`,
+        'Exemple de contenu :',
+        'MONGODB_URI=mongodb+srv://.../perco-dofus',
+        'CLIENT_ID=votre_client_id_discord',
+      ].join('\n')
+    );
   }
 
   try {
