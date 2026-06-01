@@ -13,6 +13,12 @@ contextBridge.exposeInMainWorld('recolteAPI', {
   delete: (id)   => ipcRenderer.invoke('recolte:delete', id),
 });
 
+contextBridge.exposeInMainWorld('seasonAPI', {
+  list: () => ipcRenderer.invoke('season:list'),
+  create: payload => ipcRenderer.invoke('season:create', payload),
+  delete: id => ipcRenderer.invoke('season:delete', id),
+});
+
 contextBridge.exposeInMainWorld('widgetAPI', {
   getState: () => ipcRenderer.invoke('widget:getState'),
   open: () => ipcRenderer.invoke('widget:open'),

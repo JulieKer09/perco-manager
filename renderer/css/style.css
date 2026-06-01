@@ -1093,6 +1093,12 @@ select.input { cursor: pointer; }
   width: 150px;
 }
 
+.dash-season-btn {
+  padding: 7px 10px;
+  font-size: 12px;
+  line-height: 1;
+}
+
 .dash-stats {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));

@@ -188,6 +188,7 @@ const state = {
   dashboardViewMode: 'global',
   dashboardContentMode: 'zones',
   dashboardZoneSort: 'kamas',
+  dashboardSeasonId: 'none',
 };
 
 const authState = {
@@ -196,6 +197,7 @@ const authState = {
 
 const FAVORITES_STORAGE_KEY = 'percoFavorites';
 const DASHBOARD_CONTENT_MODE_STORAGE_KEY = 'dashboardContentMode';
+const DASHBOARD_SEASON_FILTER_STORAGE_KEY = 'dashboardSeasonFilter';
 const TAGS_STORAGE_KEY = 'customZoneTagsV2';
 const ZONE_TAGS_STORAGE_KEY = 'zoneTagIdsByZone';
 const SERVER_SCOPED_STORAGE_MIGRATION_KEY = 'serverScopedStorageMigratedV1';
@@ -797,6 +799,7 @@ function setupDataSync() {
     clearTimeout(refreshTimer);
     refreshTimer = setTimeout(async () => {
       await loadPercos();
+      await refreshSeasonFilterOptions();
       if (state.activeTab === 'dashboard') {
         const dashboardServerFilter = document.getElementById('dash-filtre-serveur')?.value || 'tous';
         await loadDashboard(dashboardServerFilter);
@@ -1471,13 +1474,25 @@ function setupDashboard() {
     state.dashboardContentMode = savedContentMode;
   }
 
+  const savedSeasonId = localStorage.getItem(DASHBOARD_SEASON_FILTER_STORAGE_KEY);
+  if (savedSeasonId) {
+    state.dashboardSeasonId = savedSeasonId;
+  }
+
   document.querySelector('.tab[data-tab="dashboard"]').addEventListener('click', () => {
     loadDashboard(document.getElementById('dash-filtre-serveur').value);
   });
   document.getElementById('dash-filtre-serveur').addEventListener('change', e => {
+    refreshSeasonFilterOptions();
     loadDashboard(e.target.value);
   });
   document.getElementById('dash-filtre-periode').addEventListener('change', () => {
+    loadDashboard(document.getElementById('dash-filtre-serveur').value);
+  });
+  document.getElementById('dash-filtre-saison')?.addEventListener('change', e => {
+    state.dashboardSeasonId = e.target.value || 'none';
+    localStorage.setItem(DASHBOARD_SEASON_FILTER_STORAGE_KEY, state.dashboardSeasonId);
+    syncDashboardTimeFilterState();
     loadDashboard(document.getElementById('dash-filtre-serveur').value);
   });
   document.getElementById('dash-filtre-zone')?.addEventListener('change', () => {
@@ -1509,8 +1524,18 @@ function setupDashboard() {
     });
   });
 
+  document.getElementById('dash-season-create')?.addEventListener('click', async () => {
+    await handleCreateSeason();
+  });
+
+  document.getElementById('dash-season-delete')?.addEventListener('click', async () => {
+    await handleDeleteSeason();
+  });
+
   syncDashboardContentSwitch();
   applyDashboardContentView();
+  refreshSeasonFilterOptions();
+  syncDashboardTimeFilterState();
 }
 
 function syncDashboardContentSwitch() {
@@ -1526,6 +1551,159 @@ function applyDashboardContentView() {
 
   zonesBox?.classList.toggle('hidden', showHistory);
   historyBox?.classList.toggle('hidden', !showHistory);
+}
+
+function getSeasonServerFilterTarget() {
+  const filter = document.getElementById('dash-filtre-serveur')?.value || 'tous';
+  return filter === 'tous' ? null : filter;
+}
+
+function seasonDateOnly(dateStr) {
+  const d = new Date(dateStr);
+  if (!Number.isFinite(d.getTime())) return 'date invalide';
+  return d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
+
+function formatSeasonOptionLabel(season, withServerPrefix = false) {
+  const serverPrefix = withServerPrefix ? `${season.serveur} · ` : '';
+  return `${serverPrefix}${season.name} (${seasonDateOnly(season.dateDebut)} → ${seasonDateOnly(season.dateFin)})`;
+}
+
+function parseDayToIso(dayValue, endOfDay = false) {
+  const clean = String(dayValue || '').trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(clean)) return null;
+
+  const date = new Date(`${clean}T${endOfDay ? '23:59:59.999' : '00:00:00.000'}`);
+  if (!Number.isFinite(date.getTime())) return null;
+  return date.toISOString();
+}
+
+function normalizeSeasonServerInput(raw) {
+  const value = String(raw || '').trim().toLowerCase();
+  if (value === 'mikhal') return 'Mikhal';
+  if (value === 'dakal') return 'Dakal';
+  if (value === 'kourial') return 'Kourial';
+  return '';
+}
+
+async function refreshSeasonFilterOptions(preferredId) {
+  const select = document.getElementById('dash-filtre-saison');
+  if (!select || !window.seasonAPI?.list) return;
+
+  const serverTarget = getSeasonServerFilterTarget();
+  const allSeasons = await window.seasonAPI.list();
+  const filtered = (allSeasons || [])
+    .filter(season => !serverTarget || season.serveur === serverTarget)
+    .sort((a, b) => new Date(b.dateDebut).getTime() - new Date(a.dateDebut).getTime());
+
+  const shouldPrefixServer = !serverTarget;
+  select.innerHTML = [
+    '<option value="none">Aucune saison (periode ci-dessus)</option>',
+    ...filtered.map(season => (
+      `<option value="${escHtml(season._id)}">${escHtml(formatSeasonOptionLabel(season, shouldPrefixServer))}</option>`
+    )),
+  ].join('');
+
+  const candidate = preferredId || state.dashboardSeasonId || 'none';
+  const selected = filtered.some(season => season._id === candidate) ? candidate : 'none';
+  select.value = selected;
+  state.dashboardSeasonId = selected;
+  localStorage.setItem(DASHBOARD_SEASON_FILTER_STORAGE_KEY, selected);
+  syncDashboardTimeFilterState();
+}
+
+function getSelectedSeason(seasons) {
+  const seasonId = document.getElementById('dash-filtre-saison')?.value || 'none';
+  if (!seasonId || seasonId === 'none') return null;
+  return (seasons || []).find(s => s._id === seasonId) || null;
+}
+
+function isInSeasonRange(dateStr, season) {
+  const ts = new Date(dateStr).getTime();
+  const start = new Date(season?.dateDebut).getTime();
+  const end = new Date(season?.dateFin).getTime();
+  if (!Number.isFinite(ts) || !Number.isFinite(start) || !Number.isFinite(end)) return false;
+  return ts >= start && ts <= end;
+}
+
+function syncDashboardTimeFilterState() {
+  const hasSeason = (document.getElementById('dash-filtre-saison')?.value || 'none') !== 'none';
+  const periodSelect = document.getElementById('dash-filtre-periode');
+  if (periodSelect) {
+    periodSelect.disabled = hasSeason;
+    periodSelect.title = hasSeason
+      ? 'Filtre periode desactive car une saison est selectionnee'
+      : '';
+  }
+}
+
+async function handleCreateSeason() {
+  if (!window.seasonAPI?.create) return;
+
+  const defaultServer = getSeasonServerFilterTarget() || state.serveur;
+  const seasonName = window.prompt('Nom de la saison (ex: S3 2026)', 'Saison');
+  if (!seasonName) return;
+
+  let server = defaultServer;
+  if (!server) {
+    const serverInput = window.prompt('Serveur de la saison (Mikhal, Dakal, Kourial)', 'Mikhal');
+    server = normalizeSeasonServerInput(serverInput);
+    if (!server) {
+      window.alert('Serveur invalide. Valeurs autorisees: Mikhal, Dakal, Kourial.');
+      return;
+    }
+  }
+
+  const startInput = window.prompt('Date de debut (format YYYY-MM-DD)', '2026-01-01');
+  if (!startInput) return;
+  const endInput = window.prompt('Date de fin (format YYYY-MM-DD)', '2026-03-31');
+  if (!endInput) return;
+
+  const dateDebut = parseDayToIso(startInput, false);
+  const dateFin = parseDayToIso(endInput, true);
+  if (!dateDebut || !dateFin) {
+    window.alert('Format de date invalide. Utilise YYYY-MM-DD.');
+    return;
+  }
+
+  if (new Date(dateFin).getTime() < new Date(dateDebut).getTime()) {
+    window.alert('La date de fin doit etre superieure ou egale a la date de debut.');
+    return;
+  }
+
+  try {
+    const created = await window.seasonAPI.create({
+      name: seasonName,
+      serveur: server,
+      dateDebut,
+      dateFin,
+    });
+    await refreshSeasonFilterOptions(created?._id || undefined);
+    await loadDashboard(document.getElementById('dash-filtre-serveur')?.value || 'tous');
+  } catch (error) {
+    window.alert(error?.message || 'Impossible de creer la saison.');
+  }
+}
+
+async function handleDeleteSeason() {
+  if (!window.seasonAPI?.delete) return;
+
+  const seasonId = document.getElementById('dash-filtre-saison')?.value || 'none';
+  if (seasonId === 'none') {
+    window.alert('Selectionne une saison a supprimer.');
+    return;
+  }
+
+  const ok = window.confirm('Supprimer cette saison ?');
+  if (!ok) return;
+
+  try {
+    await window.seasonAPI.delete(seasonId);
+    await refreshSeasonFilterOptions('none');
+    await loadDashboard(document.getElementById('dash-filtre-serveur')?.value || 'tous');
+  } catch (error) {
+    window.alert(error?.message || 'Impossible de supprimer la saison.');
+  }
 }
 
 function isInSelectedPeriod(dateStr, period) {
@@ -1558,8 +1736,15 @@ async function loadDashboard(filtreServeur = 'tous') {
 
   const all = await window.recolteAPI.getAll();
   let data = filtreServeur === 'tous' ? all : all.filter(r => r.serveur === filtreServeur);
-  const period = document.getElementById('dash-filtre-periode')?.value || '30d';
-  data = data.filter(r => isInSelectedPeriod(r.date, period));
+  const seasons = window.seasonAPI?.list ? await window.seasonAPI.list() : [];
+  const selectedSeason = getSelectedSeason(seasons);
+
+  if (selectedSeason) {
+    data = data.filter(r => r.serveur === selectedSeason.serveur && isInSeasonRange(r.date, selectedSeason));
+  } else {
+    const period = document.getElementById('dash-filtre-periode')?.value || '30d';
+    data = data.filter(r => isInSelectedPeriod(r.date, period));
+  }
 
   if (state.dashboardViewMode === 'mine') {
     const favoritesByServer = new Map();
@@ -1681,6 +1866,7 @@ async function loadDashboard(filtreServeur = 'tous') {
         }
 
         await window.recolteAPI.delete(rowId);
+        await refreshSeasonFilterOptions();
         await loadDashboard(document.getElementById('dash-filtre-serveur').value);
       } catch (err) {
         console.error('delete dashboard row error:', err);

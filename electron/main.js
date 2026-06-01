@@ -4,6 +4,7 @@ const path = require('path');
 const mongoose = require('mongoose');
 const Percepteur = require('../models/Percepteur');
 const Recolte    = require('../models/Recolte');
+const Saison     = require('../models/Saison');
 const {
   loadPersistedSession,
   loginWithDiscord,
@@ -425,6 +426,68 @@ ipcMain.handle('recolte:delete', async (_event, id) => {
   const user = requireDiscordUser();
   await Recolte.findOneAndDelete({ _id: id, ownerDiscordId: user.id });
   broadcastDataChanged('recolte:delete');
+  return { success: true };
+});
+
+ipcMain.handle('season:list', async () => {
+  const user = requireDiscordUser();
+  const docs = await Saison.find({ ownerDiscordId: user.id })
+    .sort({ serveur: 1, dateDebut: -1, createdAt: -1 })
+    .lean();
+
+  return docs.map(d => ({
+    ...d,
+    _id: d._id.toString(),
+    dateDebut: d.dateDebut?.toISOString?.() || d.dateDebut,
+    dateFin: d.dateFin?.toISOString?.() || d.dateFin,
+  }));
+});
+
+ipcMain.handle('season:create', async (_event, payload) => {
+  const user = requireDiscordUser();
+  const name = String(payload?.name || '').trim();
+  const serveur = String(payload?.serveur || '').trim();
+  const dateDebut = new Date(payload?.dateDebut);
+  const dateFin = new Date(payload?.dateFin);
+
+  if (!name) {
+    throw new Error('Le nom de saison est obligatoire.');
+  }
+  if (!['Mikhal', 'Dakal', 'Kourial'].includes(serveur)) {
+    throw new Error('Serveur de saison invalide.');
+  }
+  if (!Number.isFinite(dateDebut.getTime()) || !Number.isFinite(dateFin.getTime())) {
+    throw new Error('Dates de saison invalides.');
+  }
+  if (dateFin < dateDebut) {
+    throw new Error('La date de fin doit etre superieure ou egale a la date de debut.');
+  }
+
+  const season = new Saison({
+    name,
+    serveur,
+    dateDebut,
+    dateFin,
+    ownerDiscordId: user.id,
+    ownerDiscordName: user.displayName || user.username || 'Discord',
+  });
+
+  await season.save();
+  const doc = season.toObject();
+  broadcastDataChanged('season:create');
+
+  return {
+    ...doc,
+    _id: doc._id.toString(),
+    dateDebut: doc.dateDebut?.toISOString?.() || doc.dateDebut,
+    dateFin: doc.dateFin?.toISOString?.() || doc.dateFin,
+  };
+});
+
+ipcMain.handle('season:delete', async (_event, id) => {
+  const user = requireDiscordUser();
+  await Saison.findOneAndDelete({ _id: id, ownerDiscordId: user.id });
+  broadcastDataChanged('season:delete');
   return { success: true };
 });
 
