@@ -595,9 +595,9 @@ async function runRecolteAction(perco, repose) {
   if (repose) {
     await window.percoAPI.update(perco._id, {
       statut: 'vivant',
-      sacoche: false,
-      coffre: false,
-      cle: false,
+      sacoche: Boolean(perco.sacoche),
+      coffre: Boolean(perco.coffre),
+      cle: Boolean(perco.cle),
       dateAjout: new Date(),
     });
 
