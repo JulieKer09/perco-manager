@@ -1272,9 +1272,9 @@ async function confirmMortAction(repose) {
   if (repose) {
     await window.percoAPI.update(state.actionTarget, {
       statut:    'vivant',
-      sacoche:   false,
-      coffre:    false,
-      cle:       false,
+      sacoche:   Boolean(perco?.sacoche),
+      coffre:    Boolean(perco?.coffre),
+      cle:       Boolean(perco?.cle),
       dateAjout: new Date(),
     });
 
@@ -1321,9 +1321,9 @@ async function confirmRecolteAction(repose) {
   if (repose) {
     await window.percoAPI.update(state.actionTarget, {
       statut:    'vivant',
-      sacoche:   false,
-      coffre:    false,
-      cle:       false,
+      sacoche:   Boolean(perco?.sacoche),
+      coffre:    Boolean(perco?.coffre),
+      cle:       Boolean(perco?.cle),
       dateAjout: new Date(),
     });
 
