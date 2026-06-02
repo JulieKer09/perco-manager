@@ -188,7 +188,6 @@ const state = {
   activeTagFilter: '',
   dashboardViewMode: 'global',
   dashboardContentMode: 'zones',
-  dashboardZoneSort: 'kamas',
   dashboardSeasonId: 'none',
   seasonFormMode: 'create',
 };
@@ -1013,6 +1012,7 @@ function setupSeasonWorkspaceControls() {
   const seasonSelect = document.getElementById('season-actif');
   const quickCreate = document.getElementById('season-add-quick');
   const quickEdit = document.getElementById('season-edit-quick');
+  const quickDelete = document.getElementById('season-delete-quick');
 
   seasonSelect?.addEventListener('change', async e => {
     const value = normalizeSeasonId(e.target.value || 'none');
@@ -1029,6 +1029,10 @@ function setupSeasonWorkspaceControls() {
 
   quickEdit?.addEventListener('click', async () => {
     await openSeasonEditModalFromSelection();
+  });
+
+  quickDelete?.addEventListener('click', async () => {
+    await handleDeleteActiveSeason();
   });
 }
 
@@ -1749,20 +1753,12 @@ function setupDashboard() {
     refreshSeasonFilterOptions();
     loadDashboard(e.target.value);
   });
-  document.getElementById('dash-filtre-periode').addEventListener('change', () => {
-    loadDashboard(document.getElementById('dash-filtre-serveur').value);
-  });
   document.getElementById('dash-filtre-saison')?.addEventListener('change', e => {
     state.dashboardSeasonId = e.target.value || 'none';
     localStorage.setItem(DASHBOARD_SEASON_FILTER_STORAGE_KEY, state.dashboardSeasonId);
-    syncDashboardTimeFilterState();
     loadDashboard(document.getElementById('dash-filtre-serveur').value);
   });
   document.getElementById('dash-filtre-zone')?.addEventListener('change', () => {
-    loadDashboard(document.getElementById('dash-filtre-serveur').value);
-  });
-  document.getElementById('dash-zone-sort')?.addEventListener('change', e => {
-    state.dashboardZoneSort = e.target.value || 'kamas';
     loadDashboard(document.getElementById('dash-filtre-serveur').value);
   });
 
@@ -1787,14 +1783,9 @@ function setupDashboard() {
     });
   });
 
-  document.getElementById('dash-season-delete')?.addEventListener('click', async () => {
-    await handleDeleteSeason();
-  });
-
   syncDashboardContentSwitch();
   applyDashboardContentView();
   refreshSeasonFilterOptions();
-  syncDashboardTimeFilterState();
 }
 
 function syncDashboardContentSwitch() {
@@ -1849,7 +1840,7 @@ async function refreshSeasonFilterOptions(preferredId) {
 
   const shouldPrefixServer = !serverTarget;
   select.innerHTML = [
-    '<option value="none">Aucune saison (periode ci-dessus)</option>',
+    '<option value="none">Toutes saisons</option>',
     ...filtered.map(season => (
       `<option value="${escHtml(season._id)}">${escHtml(formatSeasonOptionLabel(season, shouldPrefixServer))}</option>`
     )),
@@ -1860,7 +1851,6 @@ async function refreshSeasonFilterOptions(preferredId) {
   select.value = selected;
   state.dashboardSeasonId = selected;
   localStorage.setItem(DASHBOARD_SEASON_FILTER_STORAGE_KEY, selected);
-  syncDashboardTimeFilterState();
 }
 
 function getSelectedSeason(seasons) {
@@ -1877,22 +1867,11 @@ function isInSeasonRange(dateStr, season) {
   return ts >= start && ts <= end;
 }
 
-function syncDashboardTimeFilterState() {
-  const hasSeason = (document.getElementById('dash-filtre-saison')?.value || 'none') !== 'none';
-  const periodSelect = document.getElementById('dash-filtre-periode');
-  if (periodSelect) {
-    periodSelect.disabled = hasSeason;
-    periodSelect.title = hasSeason
-      ? 'Filtre periode desactive car une saison est selectionnee'
-      : '';
-  }
-}
-
-async function handleDeleteSeason() {
+async function handleDeleteSeasonById(seasonId) {
   if (!window.seasonAPI?.delete) return;
 
-  const seasonId = document.getElementById('dash-filtre-saison')?.value || 'none';
-  if (seasonId === 'none') {
+  const targetId = normalizeSeasonId(seasonId);
+  if (targetId === 'none') {
     window.alert('Selectionne une saison a supprimer.');
     return;
   }
@@ -1901,13 +1880,19 @@ async function handleDeleteSeason() {
   if (!ok) return;
 
   try {
-    await window.seasonAPI.delete(seasonId);
+    await window.seasonAPI.delete(targetId);
     await refreshSeasonFilterOptions('none');
     await refreshActiveSeasonOptions();
-    await loadDashboard(document.getElementById('dash-filtre-serveur')?.value || 'tous');
+    if (state.activeTab === 'dashboard') {
+      await loadDashboard(document.getElementById('dash-filtre-serveur')?.value || 'tous');
+    }
   } catch (error) {
     window.alert(error?.message || 'Impossible de supprimer la saison.');
   }
+}
+
+async function handleDeleteActiveSeason() {
+  await handleDeleteSeasonById(state.activeSeasonId);
 }
 
 function isInSelectedPeriod(dateStr, period) {
@@ -1952,8 +1937,8 @@ async function loadDashboard(filtreServeur = 'tous') {
         && isInSeasonRange(r.date, selectedSeason);
     });
   } else {
-    const period = document.getElementById('dash-filtre-periode')?.value || '30d';
-    data = data.filter(r => isInSelectedPeriod(r.date, period));
+    // Sans saison selectionnee, on affiche tout l'historique.
+    data = data.filter(() => true);
   }
 
   if (state.dashboardViewMode === 'mine') {
@@ -2138,17 +2123,7 @@ function buildZoneReportRows(rows) {
   });
 
   const list = [...byZone.values()];
-  const sortMode = state.dashboardZoneSort || 'kamas';
-
-  if (sortMode === 'alpha') {
-    list.sort((a, b) => a.zone.localeCompare(b.zone, 'fr', { sensitivity: 'base' }));
-  } else if (sortMode === 'recoltes') {
-    list.sort((a, b) => b.recoltes - a.recoltes || b.kamas - a.kamas);
-  } else if (sortMode === 'morts') {
-    list.sort((a, b) => b.morts - a.morts || b.kamas - a.kamas);
-  } else {
-    list.sort((a, b) => b.kamas - a.kamas || b.recoltes - a.recoltes);
-  }
+  list.sort((a, b) => b.kamas - a.kamas || b.recoltes - a.recoltes);
 
   return list;
 }

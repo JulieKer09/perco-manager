@@ -47,6 +47,7 @@
         </select>
         <button type="button" id="season-add-quick" class="btn btn-ghost" style="padding:7px 10px;font-size:12px">+ Saison</button>
         <button type="button" id="season-edit-quick" class="btn btn-ghost" style="padding:7px 10px;font-size:12px">Modifier saison</button>
+        <button type="button" id="season-delete-quick" class="btn btn-ghost" style="padding:7px 10px;font-size:12px">Supprimer saison</button>
         <input type="text" id="search" class="input search-input" placeholder="Rechercher..." />
         <span id="count-label" class="count-label">0 perco(s)</span>
       </div>
@@ -74,17 +75,9 @@
           <option value="Dakal">🛡️ Dakal</option>
           <option value="Kourial">🏹 Kourial</option>
         </select>
-        <select id="dash-filtre-periode" class="input" style="width:170px">
-          <option value="24h">Dernieres 24h</option>
-          <option value="7d">7 derniers jours</option>
-          <option value="30d" selected>30 derniers jours</option>
-          <option value="90d">90 derniers jours</option>
-          <option value="all">Depuis le debut</option>
-        </select>
         <select id="dash-filtre-saison" class="input" style="width:260px">
-          <option value="none">Aucune saison (periode ci-dessus)</option>
+          <option value="none">Toutes saisons</option>
         </select>
-        <button type="button" id="dash-season-delete" class="btn btn-ghost dash-season-btn">Supprimer saison</button>
         <select id="dash-filtre-zone" class="input" style="width:240px">
           <option value="all">Toutes les zones</option>
         </select>
@@ -148,12 +141,6 @@
         <div class="dash-zones-header">
           <h3>Rapport par zone</h3>
           <div class="dash-zones-controls">
-            <select id="dash-zone-sort" class="input" style="width:190px">
-              <option value="kamas">Tri: Kamas rapportés</option>
-              <option value="recoltes">Tri: Nb de récoltes</option>
-              <option value="morts">Tri: Nb de morts</option>
-              <option value="alpha">Tri: Zone A-Z</option>
-            </select>
             <span id="dash-zones-meta" class="dash-zones-meta">Aucune donnée</span>
           </div>
         </div>
