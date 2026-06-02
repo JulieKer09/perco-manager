@@ -366,6 +366,19 @@ html, body {
 }
 .action-bar-right { display: flex; align-items: center; gap: 10px; margin-left: auto; }
 
+/* Les controles interactifs ne doivent jamais etre une zone draggable Electron. */
+.action-bar,
+.action-bar *,
+.dash-header,
+.dash-header * {
+  -webkit-app-region: no-drag;
+}
+
+.action-bar-right {
+  position: relative;
+  z-index: 2;
+}
+
 .tags-toolbar {
   position: relative;
   display: inline-flex;
@@ -1030,6 +1043,24 @@ html, body {
 .input:focus { border-color: var(--gold); }
 select.input { cursor: pointer; }
 .textarea { resize: vertical; min-height: 65px; }
+
+input,
+select,
+button,
+textarea {
+  -webkit-user-select: auto;
+  user-select: auto;
+}
+
+#season-actif,
+#season-add-quick,
+#season-edit-quick,
+#dash-filtre-saison,
+#dash-season-delete {
+  position: relative;
+  z-index: 3;
+  pointer-events: auto;
+}
 
 /* Toggle récolter / reposer */
 .recolte-opts { display: flex; gap: 8px; }
