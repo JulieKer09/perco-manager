@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 const recolteSchema = new mongoose.Schema({
   percoId: { type: mongoose.Schema.Types.ObjectId, ref: 'Percepteur' },
   zone:    { type: String, default: '' },
+  seasonId: { type: String, default: '', index: true },
   potionLevel: { type: Number, default: null },
   serveur: { type: String, enum: ['Mikhal', 'Dakal', 'Kourial'] },
   valeur:  { type: Number, default: 0 },

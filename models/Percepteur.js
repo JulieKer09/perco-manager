@@ -26,6 +26,11 @@ const percepteurSchema = new mongoose.Schema({
     enum: ['Mikhal', 'Dakal', 'Kourial'],
     default: 'Mikhal',
   },
+  seasonId: {
+    type: String,
+    default: '',
+    index: true,
+  },
   statut: {
     type: String,
     enum: ['vivant', 'attaqué', 'mort'],

@@ -16,6 +16,7 @@ contextBridge.exposeInMainWorld('recolteAPI', {
 contextBridge.exposeInMainWorld('seasonAPI', {
   list: () => ipcRenderer.invoke('season:list'),
   create: payload => ipcRenderer.invoke('season:create', payload),
+  update: payload => ipcRenderer.invoke('season:update', payload),
   delete: id => ipcRenderer.invoke('season:delete', id),
 });
 

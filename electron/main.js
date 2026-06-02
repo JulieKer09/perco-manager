@@ -484,6 +484,55 @@ ipcMain.handle('season:create', async (_event, payload) => {
   };
 });
 
+ipcMain.handle('season:update', async (_event, payload) => {
+  const user = requireDiscordUser();
+  const id = String(payload?.id || '').trim();
+  const name = String(payload?.name || '').trim();
+  const serveur = String(payload?.serveur || '').trim();
+  const dateDebut = new Date(payload?.dateDebut);
+  const dateFin = new Date(payload?.dateFin);
+
+  if (!id) {
+    throw new Error('ID de saison manquant.');
+  }
+  if (!name) {
+    throw new Error('Le nom de saison est obligatoire.');
+  }
+  if (!['Mikhal', 'Dakal', 'Kourial'].includes(serveur)) {
+    throw new Error('Serveur de saison invalide.');
+  }
+  if (!Number.isFinite(dateDebut.getTime()) || !Number.isFinite(dateFin.getTime())) {
+    throw new Error('Dates de saison invalides.');
+  }
+  if (dateFin < dateDebut) {
+    throw new Error('La date de fin doit etre superieure ou egale a la date de debut.');
+  }
+
+  const season = await Saison.findOneAndUpdate(
+    { _id: id, ownerDiscordId: user.id },
+    {
+      name,
+      serveur,
+      dateDebut,
+      dateFin,
+      updatedAt: new Date(),
+    },
+    { new: true }
+  ).lean();
+
+  if (!season) {
+    throw new Error('Saison introuvable.');
+  }
+
+  broadcastDataChanged('season:update');
+  return {
+    ...season,
+    _id: season._id.toString(),
+    dateDebut: season.dateDebut?.toISOString?.() || season.dateDebut,
+    dateFin: season.dateFin?.toISOString?.() || season.dateFin,
+  };
+});
+
 ipcMain.handle('season:delete', async (_event, id) => {
   const user = requireDiscordUser();
   await Saison.findOneAndDelete({ _id: id, ownerDiscordId: user.id });

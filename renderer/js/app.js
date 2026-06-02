@@ -176,6 +176,7 @@ const ZONES = [
 const state = {
   percos: [],
   serveur: 'Mikhal',
+  activeSeasonId: 'none',
   search: '',
   activeTab: 'serveur',
   actionTarget: null,
@@ -189,6 +190,7 @@ const state = {
   dashboardContentMode: 'zones',
   dashboardZoneSort: 'kamas',
   dashboardSeasonId: 'none',
+  seasonFormMode: 'create',
 };
 
 const authState = {
@@ -198,6 +200,7 @@ const authState = {
 const FAVORITES_STORAGE_KEY = 'percoFavorites';
 const DASHBOARD_CONTENT_MODE_STORAGE_KEY = 'dashboardContentMode';
 const DASHBOARD_SEASON_FILTER_STORAGE_KEY = 'dashboardSeasonFilter';
+const ACTIVE_SEASON_BY_SERVER_STORAGE_KEY = 'activeSeasonByServer';
 const TAGS_STORAGE_KEY = 'customZoneTagsV2';
 const ZONE_TAGS_STORAGE_KEY = 'zoneTagIdsByZone';
 const SERVER_SCOPED_STORAGE_MIGRATION_KEY = 'serverScopedStorageMigratedV1';
@@ -221,13 +224,34 @@ function normalizeServerName(serverName = state.serveur) {
   return clean || 'Mikhal';
 }
 
-function getServerScopedStorageKey(baseKey, serverName = state.serveur) {
+function normalizeSeasonId(seasonId = state.activeSeasonId) {
+  const clean = String(seasonId || '').trim();
+  return clean || 'none';
+}
+
+function getLegacyServerScopedStorageKey(baseKey, serverName = state.serveur) {
   return `${baseKey}:${normalizeServerName(serverName).toLowerCase()}`;
 }
 
-function getScopedJSON(baseKey, fallback, serverName = state.serveur) {
+function getServerScopedStorageKey(baseKey, serverName = state.serveur, seasonId = state.activeSeasonId) {
+  return `${baseKey}:${normalizeServerName(serverName).toLowerCase()}:season:${normalizeSeasonId(seasonId)}`;
+}
+
+function getScopedJSON(baseKey, fallback, serverName = state.serveur, seasonId = state.activeSeasonId) {
   try {
-    const raw = localStorage.getItem(getServerScopedStorageKey(baseKey, serverName));
+    const scopedKey = getServerScopedStorageKey(baseKey, serverName, seasonId);
+    let raw = localStorage.getItem(scopedKey);
+
+    // Migration douce: si on est hors saison et qu'une ancienne cle serveur existe,
+    // on la recopie sur la nouvelle cle serveur+saison.
+    if (raw === null && normalizeSeasonId(seasonId) === 'none') {
+      const legacyRaw = localStorage.getItem(getLegacyServerScopedStorageKey(baseKey, serverName));
+      if (legacyRaw !== null) {
+        localStorage.setItem(scopedKey, legacyRaw);
+        raw = legacyRaw;
+      }
+    }
+
     if (raw === null) return fallback;
     return JSON.parse(raw);
   } catch {
@@ -235,17 +259,17 @@ function getScopedJSON(baseKey, fallback, serverName = state.serveur) {
   }
 }
 
-function setScopedJSON(baseKey, value, serverName = state.serveur) {
-  localStorage.setItem(getServerScopedStorageKey(baseKey, serverName), JSON.stringify(value));
+function setScopedJSON(baseKey, value, serverName = state.serveur, seasonId = state.activeSeasonId) {
+  localStorage.setItem(getServerScopedStorageKey(baseKey, serverName, seasonId), JSON.stringify(value));
 }
 
 function migrateLegacyGlobalStorageToCurrentServer() {
   if (localStorage.getItem(SERVER_SCOPED_STORAGE_MIGRATION_KEY) === '1') return;
 
   const currentServer = normalizeServerName();
-  const favoriteServerKey = getServerScopedStorageKey(FAVORITES_STORAGE_KEY, currentServer);
-  const tagsServerKey = getServerScopedStorageKey(TAGS_STORAGE_KEY, currentServer);
-  const zoneTagsServerKey = getServerScopedStorageKey(ZONE_TAGS_STORAGE_KEY, currentServer);
+  const favoriteServerKey = getServerScopedStorageKey(FAVORITES_STORAGE_KEY, currentServer, 'none');
+  const tagsServerKey = getServerScopedStorageKey(TAGS_STORAGE_KEY, currentServer, 'none');
+  const zoneTagsServerKey = getServerScopedStorageKey(ZONE_TAGS_STORAGE_KEY, currentServer, 'none');
 
   if (localStorage.getItem(favoriteServerKey) === null) {
     const legacyFavorites = localStorage.getItem(FAVORITES_STORAGE_KEY);
@@ -271,21 +295,21 @@ function migrateLegacyGlobalStorageToCurrentServer() {
   localStorage.setItem(SERVER_SCOPED_STORAGE_MIGRATION_KEY, '1');
 }
 
-function getFavorites(serverName = state.serveur) {
-  const favs = getScopedJSON(FAVORITES_STORAGE_KEY, [], serverName);
+function getFavorites(serverName = state.serveur, seasonId = state.activeSeasonId) {
+  const favs = getScopedJSON(FAVORITES_STORAGE_KEY, [], serverName, seasonId);
   if (!Array.isArray(favs)) return [];
   return favs.map(v => String(v || '').trim()).filter(Boolean);
 }
 
-function setFavorites(favs, serverName = state.serveur) {
+function setFavorites(favs, serverName = state.serveur, seasonId = state.activeSeasonId) {
   const normalized = Array.isArray(favs)
     ? [...new Set(favs.map(v => String(v || '').trim()).filter(Boolean))]
     : [];
-  setScopedJSON(FAVORITES_STORAGE_KEY, normalized, serverName);
+  setScopedJSON(FAVORITES_STORAGE_KEY, normalized, serverName, seasonId);
 }
 
-function isFavorite(zone, serverName = state.serveur) {
-  const favs = getFavorites(serverName);
+function isFavorite(zone, serverName = state.serveur, seasonId = state.activeSeasonId) {
+  const favs = getFavorites(serverName, seasonId);
   return favs.includes(zone);
 }
 
@@ -300,9 +324,9 @@ function toggleFavorite(zone) {
   renderCards();
 }
 
-function getTags(serverName = state.serveur) {
+function getTags(serverName = state.serveur, seasonId = state.activeSeasonId) {
   try {
-    const tags = getScopedJSON(TAGS_STORAGE_KEY, [], serverName);
+    const tags = getScopedJSON(TAGS_STORAGE_KEY, [], serverName, seasonId);
     if (!Array.isArray(tags)) return [];
     return tags
       .filter(t => t && typeof t === 'object')
@@ -317,17 +341,17 @@ function getTags(serverName = state.serveur) {
   }
 }
 
-function setTags(tags, serverName = state.serveur) {
-  setScopedJSON(TAGS_STORAGE_KEY, tags, serverName);
+function setTags(tags, serverName = state.serveur, seasonId = state.activeSeasonId) {
+  setScopedJSON(TAGS_STORAGE_KEY, tags, serverName, seasonId);
 }
 
-function getZoneTagMap(serverName = state.serveur) {
-  const map = getScopedJSON(ZONE_TAGS_STORAGE_KEY, {}, serverName);
+function getZoneTagMap(serverName = state.serveur, seasonId = state.activeSeasonId) {
+  const map = getScopedJSON(ZONE_TAGS_STORAGE_KEY, {}, serverName, seasonId);
   return map && typeof map === 'object' ? map : {};
 }
 
-function setZoneTagMap(map, serverName = state.serveur) {
-  setScopedJSON(ZONE_TAGS_STORAGE_KEY, map, serverName);
+function setZoneTagMap(map, serverName = state.serveur, seasonId = state.activeSeasonId) {
+  setScopedJSON(ZONE_TAGS_STORAGE_KEY, map, serverName, seasonId);
 }
 
 function normalizeTagName(name) {
@@ -682,6 +706,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   migrateLegacyGlobalStorageToCurrentServer();
   setupTabs();
   setupServeur();
+  setupSeasonWorkspaceControls();
   setupWidgetPanel();
   setupDataSync();
   setupModals();
@@ -690,6 +715,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   setupSearch();
   setupFavoritesFilter();
   setupTagsUI();
+  await refreshActiveSeasonOptions();
   await loadPercos();
   setInterval(updateTimers, 60_000);
 });
@@ -798,6 +824,7 @@ function setupDataSync() {
   window.syncAPI.onDataChanged(() => {
     clearTimeout(refreshTimer);
     refreshTimer = setTimeout(async () => {
+      await refreshActiveSeasonOptions();
       await loadPercos();
       await refreshSeasonFilterOptions();
       if (state.activeTab === 'dashboard') {
@@ -821,6 +848,188 @@ function getPotionLevelFromZone(zoneName) {
 
 function isBdaZone(zoneName) {
   return Boolean(getZoneMeta(zoneName)?.bda);
+}
+
+function getActiveSeasonMap() {
+  const map = getScopedJSON(ACTIVE_SEASON_BY_SERVER_STORAGE_KEY, {}, 'Mikhal', 'none');
+  return map && typeof map === 'object' ? map : {};
+}
+
+function getActiveSeasonIdForServer(serverName = state.serveur) {
+  const map = getActiveSeasonMap();
+  return normalizeSeasonId(map[normalizeServerName(serverName)] || 'none');
+}
+
+function setActiveSeasonIdForServer(serverName = state.serveur, seasonId = 'none') {
+  const server = normalizeServerName(serverName);
+  const map = getActiveSeasonMap();
+  map[server] = normalizeSeasonId(seasonId);
+  setScopedJSON(ACTIVE_SEASON_BY_SERVER_STORAGE_KEY, map, 'Mikhal', 'none');
+}
+
+function normalizeDocSeasonId(seasonId) {
+  return normalizeSeasonId(seasonId || 'none');
+}
+
+function isInActiveSeasonScope(docSeasonId) {
+  return normalizeDocSeasonId(docSeasonId) === normalizeSeasonId(state.activeSeasonId);
+}
+
+function getCurrentSeasonIdForWrite() {
+  return normalizeSeasonId(state.activeSeasonId) === 'none' ? '' : state.activeSeasonId;
+}
+
+function toDateInputValue(dateStr) {
+  const d = new Date(dateStr);
+  if (!Number.isFinite(d.getTime())) return '';
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function configureSeasonFormModal(mode = 'create', season = null) {
+  state.seasonFormMode = mode === 'edit' ? 'edit' : 'create';
+
+  const title = document.querySelector('#modal-season .modal-header h2');
+  const submitBtn = document.getElementById('season-form-submit');
+  const idInput = document.getElementById('season-form-id');
+  const nameInput = document.getElementById('season-form-name');
+  const serverSelect = document.getElementById('season-form-server');
+  const startEl = document.getElementById('season-form-start');
+  const endEl = document.getElementById('season-form-end');
+
+  if (state.seasonFormMode === 'edit' && season) {
+    if (title) title.textContent = 'Modifier la saison';
+    if (submitBtn) submitBtn.textContent = 'Enregistrer';
+    if (idInput) idInput.value = season._id || '';
+    if (nameInput) nameInput.value = season.name || '';
+    if (serverSelect) {
+      serverSelect.value = season.serveur || normalizeServerName(state.serveur);
+      serverSelect.disabled = true;
+      serverSelect.title = 'Le serveur ne peut pas etre modifie pour eviter les incoherences de donnees.';
+    }
+    if (startEl) startEl.value = toDateInputValue(season.dateDebut);
+    if (endEl) endEl.value = toDateInputValue(season.dateFin);
+    return;
+  }
+
+  if (title) title.textContent = 'Créer une saison';
+  if (submitBtn) submitBtn.textContent = 'Créer';
+  if (idInput) idInput.value = '';
+  if (serverSelect) {
+    serverSelect.disabled = false;
+    serverSelect.title = '';
+  }
+}
+
+function openSeasonCreateModal(defaultServer = state.serveur) {
+  const form = document.getElementById('season-form');
+  if (!form) return;
+
+  form.reset();
+  configureSeasonFormModal('create');
+  const serverSelect = document.getElementById('season-form-server');
+  if (serverSelect) serverSelect.value = normalizeServerName(defaultServer);
+
+  const now = new Date();
+  const yyyy = now.getFullYear();
+  const mm = String(now.getMonth() + 1).padStart(2, '0');
+  const dd = String(now.getDate()).padStart(2, '0');
+  const today = `${yyyy}-${mm}-${dd}`;
+  const startEl = document.getElementById('season-form-start');
+  const endEl = document.getElementById('season-form-end');
+  if (startEl) startEl.value = startEl.value || today;
+  if (endEl) endEl.value = endEl.value || today;
+
+  openModal('modal-season');
+}
+
+async function openSeasonEditModalFromSelection() {
+  const targetSeasonId = normalizeSeasonId(state.activeSeasonId);
+  if (targetSeasonId === 'none') {
+    window.alert('Selectionne une saison active a modifier.');
+    return;
+  }
+
+  if (!window.seasonAPI?.list) return;
+  const seasons = await window.seasonAPI.list();
+  const season = seasons.find(s => s._id === targetSeasonId);
+  if (!season) {
+    window.alert('Saison introuvable.');
+    return;
+  }
+
+  const form = document.getElementById('season-form');
+  if (!form) return;
+  configureSeasonFormModal('edit', season);
+  openModal('modal-season');
+}
+
+async function refreshActiveSeasonOptions(preferredId) {
+  const select = document.getElementById('season-actif');
+  if (!select || !window.seasonAPI?.list) return;
+
+  const server = normalizeServerName(state.serveur);
+  const seasons = (await window.seasonAPI.list())
+    .filter(s => s.serveur === server)
+    .sort((a, b) => new Date(b.dateDebut).getTime() - new Date(a.dateDebut).getTime());
+
+  select.innerHTML = [
+    '<option value="none">Hors saison</option>',
+    ...seasons.map(season => (
+      `<option value="${escHtml(season._id)}">${escHtml(formatSeasonOptionLabel(season, false))}</option>`
+    )),
+  ].join('');
+
+  const saved = getActiveSeasonIdForServer(server);
+  const wanted = normalizeSeasonId(preferredId || saved || 'none');
+  const selected = seasons.some(s => s._id === wanted) ? wanted : 'none';
+
+  select.value = selected;
+  state.activeSeasonId = selected;
+  setActiveSeasonIdForServer(server, selected);
+
+  if (state.activeTagFilter.startsWith('tag:')) {
+    const activeTagId = state.activeTagFilter.slice(4);
+    if (!getTags().some(t => t.id === activeTagId)) {
+      state.activeTagFilter = '';
+    }
+  }
+
+  renderTagFilterButtons();
+  renderTagManageList();
+  updateSeasonContextBadge();
+}
+
+function updateSeasonContextBadge() {
+  const select = document.getElementById('season-actif');
+  if (!select) return;
+  const selected = select.options[select.selectedIndex];
+  select.title = selected?.textContent || 'Hors saison';
+}
+
+function setupSeasonWorkspaceControls() {
+  const seasonSelect = document.getElementById('season-actif');
+  const quickCreate = document.getElementById('season-add-quick');
+  const quickEdit = document.getElementById('season-edit-quick');
+
+  seasonSelect?.addEventListener('change', async e => {
+    const value = normalizeSeasonId(e.target.value || 'none');
+    state.activeSeasonId = value;
+    setActiveSeasonIdForServer(state.serveur, value);
+    updateSeasonContextBadge();
+    await refreshSeasonFilterOptions();
+    await loadPercos();
+  });
+
+  quickCreate?.addEventListener('click', () => {
+    openSeasonCreateModal(state.serveur);
+  });
+
+  quickEdit?.addEventListener('click', async () => {
+    await openSeasonEditModalFromSelection();
+  });
 }
 
 /* =============================================
@@ -872,21 +1081,15 @@ function setupServeur() {
   badge.addEventListener('click', () => openModal('modal-serveur'));
 
   document.querySelectorAll('.server-option').forEach(btn => {
-    btn.addEventListener('click', () => {
+    btn.addEventListener('click', async () => {
       state.serveur = btn.dataset.server;
       badge.textContent = state.serveur;
       document.querySelectorAll('.server-option').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
-      const activeTagId = state.activeTagFilter.startsWith('tag:')
-        ? state.activeTagFilter.slice(4)
-        : '';
-      if (activeTagId && !getTags().some(t => t.id === activeTagId)) {
-        state.activeTagFilter = '';
-      }
-      renderTagFilterButtons();
-      renderTagManageList();
+      await refreshActiveSeasonOptions();
+      await refreshSeasonFilterOptions();
       closeModal('modal-serveur');
-      loadPercos();
+      await loadPercos();
     });
   });
 
@@ -897,8 +1100,8 @@ async function loadPercos() {
   try {
     const all = await window.percoAPI.getAll('tous');
     const recoltes = window.recolteAPI?.getAll ? await window.recolteAPI.getAll() : [];
-    state.percos = all.filter(p => p.serveur === state.serveur);
-    state.lastRecolteByZone = buildLastRecolteByZone(recoltes, state.serveur);
+    state.percos = all.filter(p => p.serveur === state.serveur && isInActiveSeasonScope(p.seasonId));
+    state.lastRecolteByZone = buildLastRecolteByZone(recoltes, state.serveur, state.activeSeasonId);
     renderCards();
     updateDbStatus(true);
   } catch (err) {
@@ -907,10 +1110,10 @@ async function loadPercos() {
   }
 }
 
-function buildLastRecolteByZone(recoltes, serveur) {
+function buildLastRecolteByZone(recoltes, serveur, seasonId = state.activeSeasonId) {
   const byZone = {};
   recoltes
-    .filter(r => r.serveur === serveur)
+    .filter(r => r.serveur === serveur && normalizeDocSeasonId(r.seasonId) === normalizeSeasonId(seasonId))
     .forEach(r => {
       const zone = r.zone || '';
       if (!zone || !r.date) return;
@@ -1258,6 +1461,7 @@ async function confirmMortAction(repose) {
     await window.recolteAPI.log({
       percoId: state.actionTarget,
       zone:    perco?.map || '',
+      seasonId: getCurrentSeasonIdForWrite(),
       serveur: state.serveur,
       valeur: 0,
       repose,
@@ -1308,6 +1512,7 @@ async function confirmRecolteAction(repose) {
     await window.recolteAPI.log({
       percoId: state.actionTarget,
       zone:    perco?.map || '',
+      seasonId: getCurrentSeasonIdForWrite(),
       serveur: state.serveur,
       valeur,
       repose,
@@ -1374,6 +1579,10 @@ function setupForm() {
   document.getElementById('btn-cancel-add').addEventListener('click', () => closeModal('modal-add'));
   document.getElementById('btn-cancel-recolter').addEventListener('click', () => closeModal('modal-recolter'));
   document.getElementById('btn-cancel-mort').addEventListener('click', () => closeModal('modal-mort'));
+  document.getElementById('btn-cancel-season')?.addEventListener('click', () => {
+    configureSeasonFormModal('create');
+    closeModal('modal-season');
+  });
 
   // Soumission formulaire
   document.getElementById('perco-form').addEventListener('submit', async e => {
@@ -1389,6 +1598,7 @@ function setupForm() {
       sacoche: state.formIcons.sacoche,
       coffre:  state.formIcons.coffre,
       cle:     state.formIcons.cle,
+      seasonId: getCurrentSeasonIdForWrite(),
       serveur: state.serveur,
       statut:  'vivant',
     };
@@ -1420,6 +1630,58 @@ function setupForm() {
   document.getElementById('opt-mort-norepose')?.addEventListener('click', async () => {
     await confirmMortAction(false);
   });
+
+  document.getElementById('season-form')?.addEventListener('submit', async e => {
+    e.preventDefault();
+    if (!window.seasonAPI?.create) return;
+
+    const seasonId = (document.getElementById('season-form-id')?.value || '').trim();
+    const name = (document.getElementById('season-form-name')?.value || '').trim();
+    const serveur = document.getElementById('season-form-server')?.value || '';
+    const startInput = document.getElementById('season-form-start')?.value || '';
+    const endInput = document.getElementById('season-form-end')?.value || '';
+
+    if (!name || !serveur || !startInput || !endInput) {
+      window.alert('Complete tous les champs de la saison.');
+      return;
+    }
+
+    const dateDebut = parseDayToIso(startInput, false);
+    const dateFin = parseDayToIso(endInput, true);
+
+    if (!dateDebut || !dateFin) {
+      window.alert('Format de date invalide.');
+      return;
+    }
+
+    if (new Date(dateFin).getTime() < new Date(dateDebut).getTime()) {
+      window.alert('La date de fin doit etre superieure ou egale a la date de debut.');
+      return;
+    }
+
+    try {
+      const isEdit = state.seasonFormMode === 'edit' && Boolean(seasonId);
+      const saved = isEdit
+        ? await window.seasonAPI.update({ id: seasonId, name, serveur, dateDebut, dateFin })
+        : await window.seasonAPI.create({ name, serveur, dateDebut, dateFin });
+
+      configureSeasonFormModal('create');
+      closeModal('modal-season');
+
+      if (serveur === state.serveur) {
+        const preferredSeasonId = isEdit ? state.activeSeasonId : (saved?._id || 'none');
+        await refreshActiveSeasonOptions(preferredSeasonId);
+      }
+
+      await refreshSeasonFilterOptions(saved?._id || undefined);
+      if (state.activeTab === 'dashboard') {
+        await loadDashboard(document.getElementById('dash-filtre-serveur')?.value || 'tous');
+      }
+      await loadPercos();
+    } catch (error) {
+      window.alert(error?.message || 'Impossible de creer la saison.');
+    }
+  });
 }
 
 function openAddModal(prefilledZone) {
@@ -1449,6 +1711,7 @@ async function logPoseUsage({ percoId, zone, serveur, ownerSnapshot }) {
     await window.recolteAPI.log({
       percoId: percoId || undefined,
       zone: zone || '',
+      seasonId: getCurrentSeasonIdForWrite(),
       serveur,
       valeur: 0,
       repose: true,
@@ -1524,10 +1787,6 @@ function setupDashboard() {
     });
   });
 
-  document.getElementById('dash-season-create')?.addEventListener('click', async () => {
-    await handleCreateSeason();
-  });
-
   document.getElementById('dash-season-delete')?.addEventListener('click', async () => {
     await handleDeleteSeason();
   });
@@ -1576,14 +1835,6 @@ function parseDayToIso(dayValue, endOfDay = false) {
   const date = new Date(`${clean}T${endOfDay ? '23:59:59.999' : '00:00:00.000'}`);
   if (!Number.isFinite(date.getTime())) return null;
   return date.toISOString();
-}
-
-function normalizeSeasonServerInput(raw) {
-  const value = String(raw || '').trim().toLowerCase();
-  if (value === 'mikhal') return 'Mikhal';
-  if (value === 'dakal') return 'Dakal';
-  if (value === 'kourial') return 'Kourial';
-  return '';
 }
 
 async function refreshSeasonFilterOptions(preferredId) {
@@ -1637,54 +1888,6 @@ function syncDashboardTimeFilterState() {
   }
 }
 
-async function handleCreateSeason() {
-  if (!window.seasonAPI?.create) return;
-
-  const defaultServer = getSeasonServerFilterTarget() || state.serveur;
-  const seasonName = window.prompt('Nom de la saison (ex: S3 2026)', 'Saison');
-  if (!seasonName) return;
-
-  let server = defaultServer;
-  if (!server) {
-    const serverInput = window.prompt('Serveur de la saison (Mikhal, Dakal, Kourial)', 'Mikhal');
-    server = normalizeSeasonServerInput(serverInput);
-    if (!server) {
-      window.alert('Serveur invalide. Valeurs autorisees: Mikhal, Dakal, Kourial.');
-      return;
-    }
-  }
-
-  const startInput = window.prompt('Date de debut (format YYYY-MM-DD)', '2026-01-01');
-  if (!startInput) return;
-  const endInput = window.prompt('Date de fin (format YYYY-MM-DD)', '2026-03-31');
-  if (!endInput) return;
-
-  const dateDebut = parseDayToIso(startInput, false);
-  const dateFin = parseDayToIso(endInput, true);
-  if (!dateDebut || !dateFin) {
-    window.alert('Format de date invalide. Utilise YYYY-MM-DD.');
-    return;
-  }
-
-  if (new Date(dateFin).getTime() < new Date(dateDebut).getTime()) {
-    window.alert('La date de fin doit etre superieure ou egale a la date de debut.');
-    return;
-  }
-
-  try {
-    const created = await window.seasonAPI.create({
-      name: seasonName,
-      serveur: server,
-      dateDebut,
-      dateFin,
-    });
-    await refreshSeasonFilterOptions(created?._id || undefined);
-    await loadDashboard(document.getElementById('dash-filtre-serveur')?.value || 'tous');
-  } catch (error) {
-    window.alert(error?.message || 'Impossible de creer la saison.');
-  }
-}
-
 async function handleDeleteSeason() {
   if (!window.seasonAPI?.delete) return;
 
@@ -1700,6 +1903,7 @@ async function handleDeleteSeason() {
   try {
     await window.seasonAPI.delete(seasonId);
     await refreshSeasonFilterOptions('none');
+    await refreshActiveSeasonOptions();
     await loadDashboard(document.getElementById('dash-filtre-serveur')?.value || 'tous');
   } catch (error) {
     window.alert(error?.message || 'Impossible de supprimer la saison.');
@@ -1728,7 +1932,7 @@ function isDashboardMineRecord(record, favoritesResolver) {
   const ownerKey = record.ownerKey || (record.ownerTagId ? `tag:${record.ownerTagId}` : 'moi');
   if (ownerKey === 'moi') return true;
   if (!record.zone) return false;
-  return favoritesResolver(record.serveur || state.serveur).has(record.zone);
+  return favoritesResolver(record.serveur || state.serveur, normalizeDocSeasonId(record.seasonId)).has(record.zone);
 }
 
 async function loadDashboard(filtreServeur = 'tous') {
@@ -1740,7 +1944,13 @@ async function loadDashboard(filtreServeur = 'tous') {
   const selectedSeason = getSelectedSeason(seasons);
 
   if (selectedSeason) {
-    data = data.filter(r => r.serveur === selectedSeason.serveur && isInSeasonRange(r.date, selectedSeason));
+    data = data.filter(r => {
+      const docSeasonId = normalizeDocSeasonId(r.seasonId);
+      if (docSeasonId === selectedSeason._id) return true;
+      return docSeasonId === 'none'
+        && r.serveur === selectedSeason.serveur
+        && isInSeasonRange(r.date, selectedSeason);
+    });
   } else {
     const period = document.getElementById('dash-filtre-periode')?.value || '30d';
     data = data.filter(r => isInSelectedPeriod(r.date, period));
@@ -1748,12 +1958,14 @@ async function loadDashboard(filtreServeur = 'tous') {
 
   if (state.dashboardViewMode === 'mine') {
     const favoritesByServer = new Map();
-    const getFavoritesSetForServer = (serverName) => {
+    const getFavoritesSetForServer = (serverName, seasonId) => {
       const server = normalizeServerName(serverName);
-      if (!favoritesByServer.has(server)) {
-        favoritesByServer.set(server, new Set(getFavorites(server)));
+      const season = normalizeSeasonId(seasonId);
+      const key = `${server}::${season}`;
+      if (!favoritesByServer.has(key)) {
+        favoritesByServer.set(key, new Set(getFavorites(server, season)));
       }
-      return favoritesByServer.get(server);
+      return favoritesByServer.get(key);
     };
 
     data = data.filter(r => isDashboardMineRecord(r, getFavoritesSetForServer));
